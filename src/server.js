@@ -1,6 +1,8 @@
 const { nanoid } = require("nanoid");
 const { parse, dirname, join } = require("path");
 const { mkdir } = require("fs").promises;
+const { createWriteStream } = require('fs');
+const youtubedl = require('youtube-dl');
 
 const express = require("express");
 const ytsr = require('ytsr');
@@ -86,6 +88,33 @@ async function searchYoutube(options) {
     return entries;
 }
 
+app.get("/test", async (request, response) => {
+    const video = youtubedl('http://www.youtube.com/watch?v=90AiXO1pAiA',
+    // Optional arguments passed to youtube-dl.
+    ['--format=18'],
+    // Additional options can be given for calling `child_process.execFile()`.
+    { cwd: __dirname });
+
+    // Will be called when the download starts.
+    video.on('info', function(info) {
+        console.log('Download started')
+        console.log('filename: ' + info._filename)
+        console.log('size: ' + info.size);
+
+        response.json(info);
+    })
+
+    video.on('error', (info) => {
+        console.log("error", info);
+    });
+
+    video.on('end', () => {
+        console.log("done");
+    });
+
+    video.pipe(createWriteStream('myvideo.mp4'));
+});
+
 app.get("/youtube", async (request, response) => {
     if (request.query && request.query.q) {
         let entries = await searchYoutube(request.query || {});
@@ -95,8 +124,12 @@ app.get("/youtube", async (request, response) => {
     }
 });
 
-app.get("/youtube/:id", requireLibraryEntry, (request, response) => {
-    // video info
+app.get("/youtube/info/:id", (request, response) => {
+    youtubedl.getInfo("https://youtube.com/watch?v=" + request.params.id, (err, info) => {
+        const { title, duration } = info;
+
+        response.json({ title, duration: timeToSeconds(duration) * 1000 });
+    });
 });
 
 app.post("/youtube/:id", requireAuth, async (request, response) => {
