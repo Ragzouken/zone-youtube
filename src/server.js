@@ -146,7 +146,8 @@ app.get("/youtube/info/:id", async (request, response) => {
     try {
         const meta = await getMeta(request.params.id);
         const src = `${process.env.MEDIA_PATH_PUBLIC}/${meta.youtubeId}.mp4`
-        if (saved.has(meta.youtubeId)) meta.src = src;
+        //if (saved.has(meta.youtubeId)) 
+        meta.src = src;
         response.json(meta);
     } catch (e) {
         response.status(502).send(`youtube problem: ${e}`);
