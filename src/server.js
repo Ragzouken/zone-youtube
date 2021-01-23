@@ -1,12 +1,11 @@
 const { promisify } = require("util");
-const { parse, dirname, join } = require("path");
+const { dirname } = require("path");
 const { mkdir } = require("fs").promises;
 const { createWriteStream } = require('fs');
 const youtubedl = require('youtube-dl');
 
 const express = require("express");
 const ytsr = require('ytsr');
-const joi = require("joi");
 
 require('dotenv').config();
 require('dotenv').config({ path: ".env.defaults" });
