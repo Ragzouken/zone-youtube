@@ -1,4 +1,4 @@
-const { nanoid } = require("nanoid");
+const { promisify } = require("util");
 const { parse, dirname, join } = require("path");
 const { mkdir } = require("fs").promises;
 const { createWriteStream } = require('fs');
@@ -22,23 +22,39 @@ const MEDIA_PATH = process.env.MEDIA_PATH;
 
 process.title = "zone youtube";
 
+
+/** 
+ * @typedef {Object} VideoMetadata
+ * @property {string} youtubeId
+ * @property {string} title
+ * @property {number} duration
+ */
+
 db.defaults({
-    entries: [],
+    metas: [],
+    saved: [],
 }).write();
 
-const library = new Map(db.get("entries"));
+/** @type Map<string, VideoMetadata> */
+const metas = new Map(db.get("metas"));
+/** @type Set<string> */
+const saved = new Set(db.get("saved"));
 
 function save() {
-    db.set("entries", Array.from(library)).write();
+    db.set("metas", Array.from(metas)).write();
+    db.set("saved", Array.from(saved)).write();
 }
 
 process.on('SIGINT', () => {
+    console.log("saved");
     save();
     process.exit();
 });
 
 const app = express();
 app.use(express.json());
+app.use(express.static("public"));
+app.use("/" + process.env.MEDIA_PATH_PUBLIC, express.static(process.env.MEDIA_PATH));
 
 /**
  * @param {express.Request} request 
@@ -72,48 +88,28 @@ function requireLibraryEntry(request, response, next) {
     }
 }
 
-function getLocalPath(info) {
-    return join(MEDIA_PATH, info.filename);
+async function getFilteredSearch(query) {
+    try {
+        const filters = await ytsdr.getFilters(query);
+        return filters.get('Type').get('Video').url;
+    } catch (e) {
+        return query;
+    }
 }
 
 async function searchYoutube(options) {
-    const result = await ytsr(options.q, { limit: 30 });
-    const videos = result.items.filter((item) => item.type === "video");
+    const search = await getFilteredSearch(options.q)
+    const result = await ytsr(search, { limit: 30 });
+    const videos = result.items.filter((item) => item.type === "video" && !item.isLive && item.duration);
     const entries = videos.map((video) => ({
         youtubeId: video.id,
         title: video.title,
         duration: timeToSeconds(video.duration) * 1000,
         thumbnail: video.bestThumbnail.url,
     }));
+    entries.forEach((entry) => metas.set(entry.youtubeId, entry));
     return entries;
 }
-
-app.get("/test", async (request, response) => {
-    const video = youtubedl('http://www.youtube.com/watch?v=90AiXO1pAiA',
-    // Optional arguments passed to youtube-dl.
-    ['--format=18'],
-    // Additional options can be given for calling `child_process.execFile()`.
-    { cwd: __dirname });
-
-    // Will be called when the download starts.
-    video.on('info', function(info) {
-        console.log('Download started')
-        console.log('filename: ' + info._filename)
-        console.log('size: ' + info.size);
-
-        response.json(info);
-    })
-
-    video.on('error', (info) => {
-        console.log("error", info);
-    });
-
-    video.on('end', () => {
-        console.log("done");
-    });
-
-    video.pipe(createWriteStream('myvideo.mp4'));
-});
 
 app.get("/youtube", async (request, response) => {
     if (request.query && request.query.q) {
@@ -124,23 +120,64 @@ app.get("/youtube", async (request, response) => {
     }
 });
 
-app.get("/youtube/info/:id", (request, response) => {
-    youtubedl.getInfo("https://youtube.com/watch?v=" + request.params.id, (err, info) => {
-        const { title, duration } = info;
+const youtubeGetInfo = promisify(youtubedl.getInfo);
 
-        response.json({ title, duration: timeToSeconds(duration) * 1000 });
-    });
+/**
+ * @param {string} youtubeId 
+ * @returns {VideoMetadata}
+ */
+async function getMetaRemote(youtubeId) {
+    const url = "https://youtube.com/watch?v=" + youtubeId;
+    const { title, duration } = await youtubeGetInfo(url);
+    const meta = { 
+        youtubeId, 
+        title, 
+        duration: timeToSeconds(duration) * 1000,
+    };
+    return meta;
+}
+
+async function getMeta(youtubeId) {
+    const meta = metas.get(youtubeId) || await getMetaRemote(youtubeId);
+    metas.set(youtubeId, meta);
+    return meta;
+}
+
+app.get("/youtube/info/:id", async (request, response) => {
+    try {
+        const meta = await getMeta(request.params.id);
+        const src = `${process.env.MEDIA_PATH_PUBLIC}/${meta.youtubeId}.mp4`
+        if (saved.has(meta.youtubeId)) meta.src = src;
+        response.json(meta);
+    } catch (e) {
+        response.status(502).send(`youtube problem: ${e}`);
+    }
 });
 
 app.post("/youtube/:id", requireAuth, async (request, response) => {
-    // request video
-});
+    const youtubeId = request.params.id;
+    const youtubeUrl = `http://www.youtube.com/watch?v=${youtubeId}`;
+    const video = youtubedl(youtubeUrl, ['--format=18'], { cwd: __dirname });
 
-const tagSchema = joi.string().lowercase().min(1).max(32);
-const patchSchema = joi.object({
-    setTitle: joi.string().min(1).max(128),
-    addTags: joi.array().items(tagSchema).default([]),
-    delTags: joi.array().items(tagSchema).default([]),
+    video.on('info', function(info) {
+        const { title, duration, id } = info;
+        const meta = { title, duration: timeToSeconds(duration) * 1000, youtubeId: id };
+        metas.set(id, meta);
+        console.log("downloading", meta);
+        response.json(meta);
+    })
+
+    video.on('error', (info) => {
+        console.log("error", info);
+    });
+
+    video.on('end', () => {
+        saved.add(youtubeId);
+        console.log("done");
+    });
+
+    const path = `${MEDIA_PATH}/${youtubeId}.mp4`;
+    video.pipe(createWriteStream(path));
 });
 
 app.delete("/youtube/:id", requireAuth, requireLibraryEntry, async (request, response) => {
