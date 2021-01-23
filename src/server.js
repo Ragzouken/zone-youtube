@@ -157,10 +157,16 @@ app.post("/youtube/:id", requireAuth, async (request, response) => {
     const youtubeId = request.params.id;
     const youtubeUrl = `http://www.youtube.com/watch?v=${youtubeId}`;
     const video = youtubedl(youtubeUrl, ['--format=18'], { cwd: __dirname });
+    const path = `${MEDIA_PATH}/${youtubeId}.mp4`;
 
     video.on('info', function(info) {
         const { title, duration, id } = info;
-        const meta = { title, duration: timeToSeconds(duration) * 1000, youtubeId: id };
+        const meta = { 
+            title, 
+            duration: timeToSeconds(duration) * 1000, 
+            youtubeId: id,
+            src: `${process.env.MEDIA_PATH_PUBLIC}/${id}.mp4`,
+        };
         metas.set(id, meta);
         console.log("downloading", meta);
         response.json(meta);
@@ -175,7 +181,6 @@ app.post("/youtube/:id", requireAuth, async (request, response) => {
         console.log("done");
     });
 
-    const path = `${MEDIA_PATH}/${youtubeId}.mp4`;
     video.pipe(createWriteStream(path));
 });
 
