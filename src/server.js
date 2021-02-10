@@ -1,7 +1,7 @@
 const { promisify } = require("util");
 const { dirname } = require("path");
 const { mkdir } = require("fs").promises;
-const { createWriteStream } = require('fs');
+const { createWriteStream, stat } = require('fs');
 const youtubedl = require('youtube-dl');
 
 const express = require("express");
@@ -38,6 +38,8 @@ db.defaults({
 const metas = new Map(db.get("metas"));
 /** @type Set<string> */
 const saved = new Set(db.get("saved"));
+/** @type Map<string, string> */
+const statuses = new Map();
 
 function save() {
     db.set("metas", Array.from(metas)).write();
@@ -69,21 +71,6 @@ function requireAuth(request, response, next) {
         next();
     } else {
         response.status(401).json({ title: "Invalid password." });
-    }
-}
-
-/**
- * @param {express.Request} request 
- * @param {express.Response} response 
- * @param {express.NextFunction} next 
- */
-function requireLibraryEntry(request, response, next) {
-    request.libraryEntry = library.get(request.params.id);
-
-    if (request.libraryEntry) {
-        next();
-    } else {
-        response.status(404).json({ title: "Entry does not exist." });
     }
 }
 
@@ -142,23 +129,20 @@ async function getMeta(youtubeId) {
     return meta;
 }
 
-app.get("/youtube/info/:id", async (request, response) => {
-    try {
-        const meta = await getMeta(request.params.id);
-        const src = `${process.env.MEDIA_PATH_PUBLIC}/${meta.youtubeId}.mp4`
-        //if (saved.has(meta.youtubeId)) 
-        meta.source = src;
-        response.json(meta);
-    } catch (e) {
-        response.status(502).send(`youtube problem: ${e}`);
-    }
-});
-
-app.post("/youtube/:id", requireAuth, async (request, response) => {
+app.post("/youtube/:id/request", requireAuth, async (request, response) => {
     const youtubeId = request.params.id;
+    const status = statuses.get(youtubeId) || "none";
+
+    if (status === "requested" || status === "available") {
+        response.json(metas.get(youtubeId));
+        console.log("redundant request", youtubeId);
+        return;
+    }
+
     const youtubeUrl = `http://www.youtube.com/watch?v=${youtubeId}`;
     const video = youtubedl(youtubeUrl, ['--format=18'], { cwd: __dirname });
     const path = `${MEDIA_PATH}/${youtubeId}.mp4`;
+    statuses.set(youtubeId, "requested");
 
     video.on('info', function(info) {
         const { title, duration, id } = info;
@@ -170,14 +154,16 @@ app.post("/youtube/:id", requireAuth, async (request, response) => {
         };
         metas.set(id, meta);
         console.log("downloading", meta);
-        response.json(meta);
+        response.status(202).json(meta);
     })
 
     video.on('error', (info) => {
+        statuses.set(youtubeId, "failed");
         console.log("error", info);
     });
 
     video.on('end', () => {
+        statuses.set(youtubeId, "available");
         saved.add(youtubeId);
         console.log("done");
     });
@@ -185,8 +171,29 @@ app.post("/youtube/:id", requireAuth, async (request, response) => {
     video.pipe(createWriteStream(path));
 });
 
-app.delete("/youtube/:id", requireAuth, requireLibraryEntry, async (request, response) => {
-    save();
+app.get("/youtube/:id/info", async (request, response) => {
+    try {
+        const meta = await getMeta(request.params.id);
+        const src = `${process.env.MEDIA_PATH_PUBLIC}/${meta.youtubeId}.mp4`
+        //if (saved.has(meta.youtubeId)) 
+        meta.source = src;
+        response.json(meta);
+    } catch (e) {
+        response.status(502).send(`youtube problem: ${e}`);
+    }
+});
+
+app.get("/youtube/:id/status", async (request, response) => {
+    const youtubeId = request.params.id;
+    const status = statuses.get(youtubeId) || "none";
+    response.json(status);
+});
+
+app.delete("/youtube/:id", requireAuth, async (request, response) => {
+    const youtubeId = request.params.id;
+    saved.delete(youtubeId);
+    statuses.delete(youtubeId);
+    response.status(200);
 });
 
 const listener = app.listen(process.env.PORT, "localhost", () => {
