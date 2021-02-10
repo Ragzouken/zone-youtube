@@ -140,7 +140,7 @@ app.post("/youtube/:id/request", requireAuth, async (request, response) => {
     }
 
     const youtubeUrl = `http://www.youtube.com/watch?v=${youtubeId}`;
-    const video = youtubedl(youtubeUrl, ['--format=18'], { cwd: __dirname });
+    const video = youtubedl(youtubeUrl, ['--format=18', '--force-ipv4'], { cwd: __dirname });
     const path = `${MEDIA_PATH}/${youtubeId}.mp4`;
     statuses.set(youtubeId, "requested");
 
