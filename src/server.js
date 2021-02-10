@@ -151,6 +151,7 @@ app.post("/youtube/:id/request", requireAuth, async (request, response) => {
             duration: timeToSeconds(duration) * 1000, 
             youtubeId: id,
             src: `${process.env.MEDIA_PATH_PUBLIC}/${id}.mp4`,
+            source: `${process.env.MEDIA_PATH_PUBLIC}/${id}.mp4`,
         };
         metas.set(id, meta);
         console.log("downloading", meta);
@@ -172,10 +173,10 @@ app.post("/youtube/:id/request", requireAuth, async (request, response) => {
 });
 
 app.get("/youtube/:id/info", async (request, response) => {
+    const youtubeId = request.params.id;
     try {
-        const meta = await getMeta(request.params.id);
-        const src = `${process.env.MEDIA_PATH_PUBLIC}/${meta.youtubeId}.mp4`
-        //if (saved.has(meta.youtubeId)) 
+        const meta = await getMeta(youtubeId);
+        const src = `${process.env.MEDIA_PATH_PUBLIC}/${youtubeId}.mp4`
         meta.source = src;
         response.json(meta);
     } catch (e) {
