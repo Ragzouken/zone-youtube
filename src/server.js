@@ -184,7 +184,10 @@ app.post("/youtube/:id/request", requireAuth, async (request, response) => {
         requestQueue.push(youtubeId);
     }
 
-    lastDownload = lastDownload.then(() => downloadYoutubeVideo(youtubeId));
+    lastDownload = lastDownload.then(
+        () => downloadYoutubeVideo(youtubeId),
+        () => downloadYoutubeVideo(youtubeId),
+    );
 });
 
 app.get("/youtube/:id/info", async (request, response) => {
