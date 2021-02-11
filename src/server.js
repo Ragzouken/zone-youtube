@@ -132,7 +132,7 @@ async function getMeta(youtubeId) {
 /** @type {string[]} */
 const requestQueue = [];
 /** @type {Promise<void>} */
-let lastDownload;
+let lastDownload = Promise.resolve();
 
 async function downloadYoutubeVideo(youtubeId) {
     return new Promise((resolve, reject) => {
@@ -184,11 +184,7 @@ app.post("/youtube/:id/request", requireAuth, async (request, response) => {
         requestQueue.push(youtubeId);
     }
 
-    if (!lastDownload) {
-        lastDownload = downloadYoutubeVideo(youtubeId);
-    } else {
-        lastDownload = lastDownload.then(() => downloadYoutubeVideo(youtubeId));
-    }
+    lastDownload = lastDownload.then(() => downloadYoutubeVideo(youtubeId));
 });
 
 app.get("/youtube/:id/info", async (request, response) => {
