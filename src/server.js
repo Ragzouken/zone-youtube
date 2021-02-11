@@ -129,47 +129,66 @@ async function getMeta(youtubeId) {
     return meta;
 }
 
+/** @type {string[]} */
+const requestQueue = [];
+/** @type {Promise<void>} */
+let lastDownload;
+
+async function downloadYoutubeVideo(youtubeId) {
+    return new Promise((resolve, reject) => {
+        const youtubeUrl = `http://www.youtube.com/watch?v=${youtubeId}`;
+        const video = youtubedl(youtubeUrl, ['--format=18', '--force-ipv4'], { cwd: __dirname });
+        const path = `${MEDIA_PATH}/${youtubeId}.mp4`;
+
+        video.on('info', function(info) {
+            const { title, duration, id } = info;
+            const meta = { 
+                title, 
+                duration: timeToSeconds(duration) * 1000, 
+                youtubeId: id,
+                src: `${process.env.MEDIA_PATH_PUBLIC}/${id}.mp4`,
+                source: `${process.env.MEDIA_PATH_PUBLIC}/${id}.mp4`,
+            };
+            metas.set(id, meta);
+            console.log("downloading", meta);
+        })
+
+        video.on('error', (info) => {
+            statuses.set(youtubeId, "failed");
+            console.log("error", info);
+            reject(info);
+        });
+
+        video.on('end', () => {
+            statuses.set(youtubeId, "available");
+            saved.add(youtubeId);
+            console.log("done");
+            resolve();
+        });
+
+        video.pipe(createWriteStream(path));
+    });
+}
+
 app.post("/youtube/:id/request", requireAuth, async (request, response) => {
     const youtubeId = request.params.id;
     const status = statuses.get(youtubeId) || "none";
 
+    response.status(202).send();
+
     if (status === "requested" || status === "available") {
-        response.json(metas.get(youtubeId));
         console.log("redundant request", youtubeId);
         return;
+    } else {
+        statuses.set(youtubeId, "requested");
+        requestQueue.push(youtubeId);
     }
 
-    const youtubeUrl = `http://www.youtube.com/watch?v=${youtubeId}`;
-    const video = youtubedl(youtubeUrl, ['--format=18', '--force-ipv4'], { cwd: __dirname });
-    const path = `${MEDIA_PATH}/${youtubeId}.mp4`;
-    statuses.set(youtubeId, "requested");
-
-    video.on('info', function(info) {
-        const { title, duration, id } = info;
-        const meta = { 
-            title, 
-            duration: timeToSeconds(duration) * 1000, 
-            youtubeId: id,
-            src: `${process.env.MEDIA_PATH_PUBLIC}/${id}.mp4`,
-            source: `${process.env.MEDIA_PATH_PUBLIC}/${id}.mp4`,
-        };
-        metas.set(id, meta);
-        console.log("downloading", meta);
-        response.status(202).json(meta);
-    })
-
-    video.on('error', (info) => {
-        statuses.set(youtubeId, "failed");
-        console.log("error", info);
-    });
-
-    video.on('end', () => {
-        statuses.set(youtubeId, "available");
-        saved.add(youtubeId);
-        console.log("done");
-    });
-
-    video.pipe(createWriteStream(path));
+    if (!lastDownload) {
+        lastDownload = downloadYoutubeVideo(youtubeId);
+    } else {
+        lastDownload = lastDownload.then(() => downloadYoutubeVideo(youtubeId));
+    }
 });
 
 app.get("/youtube/:id/info", async (request, response) => {
