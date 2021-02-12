@@ -99,8 +99,12 @@ async function searchYoutube(options) {
 
 app.get("/youtube", async (request, response) => {
     if (request.query && request.query.q) {
-        let entries = await searchYoutube(request.query || {});
-        response.json(entries);
+        try {
+            let entries = await searchYoutube(request.query || {});
+            response.json(entries);
+        } catch (error) {
+            response.status(503).send("search failure: ${error}");
+        }
     } else {
         response.status(400).json("Search query q is required.");
     }
@@ -150,7 +154,6 @@ async function downloadYoutubeVideo(youtubeId) {
                 source: `${process.env.MEDIA_PATH_PUBLIC}/${id}.mp4`,
             };
             metas.set(id, meta);
-            console.log("downloading", meta);
         })
 
         video.on('error', (info) => {
@@ -162,7 +165,6 @@ async function downloadYoutubeVideo(youtubeId) {
         video.on('end', () => {
             statuses.set(youtubeId, "available");
             saved.add(youtubeId);
-            console.log("done");
             resolve();
         });
 
