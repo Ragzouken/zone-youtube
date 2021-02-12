@@ -114,7 +114,7 @@ const youtubeGetInfo = promisify(youtubedl.getInfo);
  */
 async function getMetaRemote(youtubeId) {
     const url = "https://youtube.com/watch?v=" + youtubeId;
-    const { title, duration } = await youtubeGetInfo(url);
+    const { title, duration } = await youtubeGetInfo(url, ['--force-ipv4']);
     const meta = { 
         youtubeId, 
         title, 
