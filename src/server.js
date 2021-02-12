@@ -85,7 +85,7 @@ async function getFilteredSearch(query) {
 
 async function searchYoutube(options) {
     const search = await getFilteredSearch(options.q)
-    const result = await ytsr(search, { limit: 30 });
+    const result = await ytsr(search, { limit: 15 });
     const videos = result.items.filter((item) => item.type === "video" && !item.isLive && item.duration);
     const entries = videos.map((video) => ({
         youtubeId: video.id,
