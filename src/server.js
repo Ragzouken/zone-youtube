@@ -97,19 +97,6 @@ async function searchYoutube(options) {
     return entries;
 }
 
-app.get("/youtube", async (request, response) => {
-    if (request.query && request.query.q) {
-        try {
-            let entries = await searchYoutube(request.query || {});
-            response.json(entries);
-        } catch (error) {
-            response.status(503).send("search failure: ${error}");
-        }
-    } else {
-        response.status(400).json("Search query q is required.");
-    }
-});
-
 const youtubeGetInfo = promisify(youtubedl.getInfo);
 
 /**
@@ -172,6 +159,44 @@ async function downloadYoutubeVideo(youtubeId) {
     });
 }
 
+app.delete("/youtube/:id", requireAuth, async (request, response) => {
+    const youtubeId = request.params.id;
+    saved.delete(youtubeId);
+    statuses.delete(youtubeId);
+    response.status(200);
+});
+
+// general libraries API
+app.get("/youtube", async (request, response) => {
+    if (request.query && request.query.q) {
+        try {
+            let entries = await searchYoutube(request.query || {});
+            response.json(entries);
+        } catch (error) {
+            response.status(503).send(`search failure: ${error}`);
+        }
+    } else {
+        response.status(400).json("Search query q is required.");
+    }
+});
+
+app.get("/youtube/:id", async (request, response) => {
+    const youtubeId = request.params.id;
+    try {
+        const meta = await getMeta(youtubeId);
+        const src = `${process.env.MEDIA_PATH_PUBLIC}/${youtubeId}.mp4`
+        meta.source = src;
+        response.json(meta);
+    } catch (e) {
+        response.status(502).send(`youtube problem: ${e}`);
+    }
+});
+
+app.get("/youtube/:id/status", async (request, response) => {
+    const status = statuses.get(request.params.id) || "none";
+    response.json(status);
+});
+
 app.post("/youtube/:id/request", requireAuth, async (request, response) => {
     const youtubeId = request.params.id;
     const status = statuses.get(youtubeId) || "none";
@@ -191,31 +216,7 @@ app.post("/youtube/:id/request", requireAuth, async (request, response) => {
         () => downloadYoutubeVideo(youtubeId),
     );
 });
-
-app.get("/youtube/:id/info", async (request, response) => {
-    const youtubeId = request.params.id;
-    try {
-        const meta = await getMeta(youtubeId);
-        const src = `${process.env.MEDIA_PATH_PUBLIC}/${youtubeId}.mp4`
-        meta.source = src;
-        response.json(meta);
-    } catch (e) {
-        response.status(502).send(`youtube problem: ${e}`);
-    }
-});
-
-app.get("/youtube/:id/status", async (request, response) => {
-    const youtubeId = request.params.id;
-    const status = statuses.get(youtubeId) || "none";
-    response.json(status);
-});
-
-app.delete("/youtube/:id", requireAuth, async (request, response) => {
-    const youtubeId = request.params.id;
-    saved.delete(youtubeId);
-    statuses.delete(youtubeId);
-    response.status(200);
-});
+//
 
 const listener = app.listen(process.env.PORT, "localhost", () => {
     console.log("zone youtube serving on " + listener.address().port);
