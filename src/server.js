@@ -143,7 +143,7 @@ async function downloadYoutubeVideo(youtubeId) {
             const meta = { 
                 title, 
                 duration: timeToSeconds(duration) * 1000, 
-                youtubeId: id,
+                mediaId: id,
                 src: `${process.env.MEDIA_PATH_PUBLIC}/${id}.mp4`,
             };
             metas.set(id, meta);
