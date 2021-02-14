@@ -176,7 +176,7 @@ app.get("/youtube", async (request, response) => {
             response.status(503).send(`search failure: ${error}`);
         }
     } else {
-        response.json(saved.map((id) => metas.get(id)));
+        response.json(Array.from(saved).map((id) => metas.get(id)));
     }
 });
 
