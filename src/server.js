@@ -44,12 +44,11 @@ const saved = new Set(db.get("saved"));
 const statuses = new Map();
 
 function save() {
-    db.set("metas", Array.from(metas)).write();
+    db.set("metas", Array.from(metas).filter(([videoId, metadata]) => saved.has(videoId))).write();
     db.set("saved", Array.from(saved)).write();
 }
 
 process.on('SIGINT', () => {
-    console.log("saved");
     save();
     process.exit();
 });
