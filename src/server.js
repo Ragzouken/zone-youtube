@@ -24,9 +24,11 @@ process.title = "zone youtube";
 
 /** 
  * @typedef {Object} VideoMetadata
- * @property {string} youtubeId
+ * @property {string} mediaId
  * @property {string} title
  * @property {number} duration
+ * @property {string?} thumbnail
+ * @property {string?} src
  */
 
 db.defaults({
@@ -83,17 +85,22 @@ async function getFilteredSearch(query) {
     }
 }
 
+/**
+ * @param {any} options 
+ * @returns {Promise<VideoMetadata[]>}
+ */
 async function searchYoutube(options) {
     const search = await getFilteredSearch(options.q)
     const result = await ytsr(search, { limit: 15 });
     const videos = result.items.filter((item) => item.type === "video" && !item.isLive && item.duration);
+    /** @type {VideoMetadata[]} */
     const entries = videos.map((video) => ({
-        youtubeId: video.id,
+        mediaId: video.id,
         title: video.title,
         duration: timeToSeconds(video.duration) * 1000,
         thumbnail: video.bestThumbnail.url,
     }));
-    entries.forEach((entry) => metas.set(entry.youtubeId, entry));
+    entries.forEach((entry) => metas.set(entry.mediaId, entry));
     return entries;
 }
 
@@ -131,14 +138,13 @@ async function downloadYoutubeVideo(youtubeId) {
         const video = youtubedl(youtubeUrl, ['--format=18', '--force-ipv4'], { cwd: __dirname });
         const path = `${MEDIA_PATH}/${youtubeId}.mp4`;
 
-        video.on('info', function(info) {
+        video.on('info', (info) => {
             const { title, duration, id } = info;
             const meta = { 
                 title, 
                 duration: timeToSeconds(duration) * 1000, 
                 youtubeId: id,
                 src: `${process.env.MEDIA_PATH_PUBLIC}/${id}.mp4`,
-                source: `${process.env.MEDIA_PATH_PUBLIC}/${id}.mp4`,
             };
             metas.set(id, meta);
         })
@@ -184,8 +190,7 @@ app.get("/youtube/:id", async (request, response) => {
     const youtubeId = request.params.id;
     try {
         const meta = await getMeta(youtubeId);
-        const src = `${process.env.MEDIA_PATH_PUBLIC}/${youtubeId}.mp4`
-        meta.source = src;
+        meta.src = `${process.env.MEDIA_PATH_PUBLIC}/${youtubeId}.mp4`
         response.json(meta);
     } catch (e) {
         response.status(502).send(`youtube problem: ${e}`);
