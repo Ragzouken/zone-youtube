@@ -176,7 +176,7 @@ app.get("/youtube", async (request, response) => {
             response.status(503).send(`search failure: ${error}`);
         }
     } else {
-        response.status(400).json("Search query q is required.");
+        response.json(saved.map((id) => metas.get(id)));
     }
 });
 
