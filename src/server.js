@@ -1,7 +1,7 @@
 const { promisify } = require("util");
 const { dirname } = require("path");
 const { mkdir } = require("fs").promises;
-const { createWriteStream, stat } = require('fs');
+const { createWriteStream } = require('fs');
 const youtubedl = require('youtube-dl');
 
 const express = require("express");
@@ -20,7 +20,6 @@ const db = low(new FileSync(process.env.DATA_PATH, { serialize: JSON.stringify, 
 const MEDIA_PATH = process.env.MEDIA_PATH;
 
 process.title = "zone youtube";
-
 
 /** 
  * @typedef {Object} VideoMetadata
@@ -222,7 +221,7 @@ app.post("/youtube/:id/request", requireAuth, async (request, response) => {
 });
 //
 
-const listener = app.listen(process.env.PORT, "localhost", () => {
+const listener = app.listen(process.env.PORT, process.env.HOST, () => {
     console.log("zone youtube serving on " + listener.address().port);
 });
 
