@@ -191,7 +191,7 @@ app.get("/youtube/:id", async (request, response) => {
         meta.src = `${process.env.MEDIA_PATH_PUBLIC}/${youtubeId}.mp4`
         response.json(meta);
     } catch (e) {
-        response.status(502).send(`youtube problem: ${e}`);
+        response.status(502).send(`access blocked by youtube`);
     }
 });
 
