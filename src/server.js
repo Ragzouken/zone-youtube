@@ -112,7 +112,7 @@ async function getMetaRemote(youtubeId) {
     const url = "https://youtube.com/watch?v=" + youtubeId;
     const { title, duration } = await youtubeGetInfo(url, ['--force-ipv4']);
     const meta = { 
-        youtubeId, 
+        mediaId: youtubeId, 
         title, 
         duration: timeToSeconds(duration) * 1000,
     };
@@ -207,7 +207,7 @@ app.post("/youtube/:id/request", requireAuth, async (request, response) => {
     response.status(202).send();
 
     if (status === "requested" || status === "available") {
-        console.log("redundant request", youtubeId);
+        console.log("redundant request", youtubeId, status);
         return;
     } else {
         statuses.set(youtubeId, "requested");
