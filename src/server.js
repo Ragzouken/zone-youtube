@@ -33,6 +33,7 @@ process.title = "zone youtube";
 db.defaults({
     metas: [],
     saved: [],
+    statuses: [],
 }).write();
 
 /** @type Map<string, VideoMetadata> */
@@ -40,11 +41,12 @@ const metas = new Map(db.get("metas"));
 /** @type Set<string> */
 const saved = new Set(db.get("saved"));
 /** @type Map<string, string> */
-const statuses = new Map();
+const statuses = new Map(db.get("statuses"));
 
 function save() {
     db.set("metas", Array.from(metas).filter(([videoId, metadata]) => saved.has(videoId))).write();
     db.set("saved", Array.from(saved)).write();
+    db.set("statuses", Array.from(statuses)).write();
 }
 
 process.on('SIGINT', () => {
