@@ -175,7 +175,7 @@ app.get("/youtube", async (request, response) => {
     if (request.query && request.query.q) {
         try {
             let entries = await searchYoutube(request.query || {});
-            response.json(entries);
+            response.json(entries.slice(0, 5));
         } catch (error) {
             response.status(503).send(`search failure: ${error}`);
         }
