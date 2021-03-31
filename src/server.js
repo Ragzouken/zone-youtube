@@ -1,6 +1,6 @@
 const { promisify } = require("util");
 const { dirname } = require("path");
-const { mkdir } = require("fs").promises;
+const { mkdir, rm } = require("fs").promises;
 const { createWriteStream } = require('fs');
 const youtubedl = require('youtube-dl');
 
@@ -153,9 +153,13 @@ async function downloadYoutubeVideo(youtubeId) {
             statuses.set(youtubeId, "failed");
             console.log("error", info);
             reject(info);
+
+            console.log("DELETING ", youtubeId);
+            rm(path);
         });
 
         video.on('end', () => {
+            console.log("SUCCESS?", youtubeId)
             statuses.set(youtubeId, "available");
             saved.add(youtubeId);
             resolve();
