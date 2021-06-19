@@ -1,8 +1,6 @@
-const { promisify } = require("util");
 const { dirname } = require("path");
-const { mkdir, rm } = require("fs").promises;
-const { createWriteStream } = require('fs');
-const youtubedl = require('youtube-dl');
+const { mkdir, unlink } = require("fs").promises;
+const youtubedl = require('youtube-dl-exec')
 
 const express = require("express");
 const ytsr = require('ytsr');
@@ -104,19 +102,24 @@ async function searchYoutube(options) {
     return entries;
 }
 
-const youtubeGetInfo = promisify(youtubedl.getInfo);
-
 /**
  * @param {string} youtubeId 
  * @returns {VideoMetadata}
  */
 async function getMetaRemote(youtubeId) {
     const url = "https://youtube.com/watch?v=" + youtubeId;
-    const { title, duration } = await youtubeGetInfo(url, ['--force-ipv4']);
+    const { title, duration } = await youtubedl(url, {
+        format: "18",
+        forceIpv4: true,
+        dumpSingleJson: true,
+    });
+
     const meta = { 
-        mediaId: youtubeId, 
         title, 
-        duration: timeToSeconds(duration) * 1000,
+        duration: duration * 1000, 
+        mediaId: youtubeId,
+        youtubeId,
+        src: `${process.env.MEDIA_PATH_PUBLIC}/${youtubeId}.mp4`,
     };
     return meta;
 }
@@ -133,40 +136,28 @@ const requestQueue = [];
 let lastDownload = Promise.resolve();
 
 async function downloadYoutubeVideo(youtubeId) {
-    return new Promise((resolve, reject) => {
-        const youtubeUrl = `http://www.youtube.com/watch?v=${youtubeId}`;
-        const video = youtubedl(youtubeUrl, ['--format=18', '--force-ipv4'], { cwd: __dirname });
-        const path = `${MEDIA_PATH}/${youtubeId}.mp4`;
+    const path = `${MEDIA_PATH}/${youtubeId}.mp4`;
+    const youtubeUrl = `http://www.youtube.com/watch?v=${youtubeId}`;
 
-        video.on('info', (info) => {
-            const { title, duration, id } = info;
-            const meta = { 
-                title, 
-                duration: timeToSeconds(duration) * 1000, 
-                mediaId: id,
-                src: `${process.env.MEDIA_PATH_PUBLIC}/${id}.mp4`,
-            };
-            metas.set(id, meta);
-        })
+    try {
+        const meta = await getMeta(youtubeId);
+        console.log("DOWNLOADING", youtubeId, "TO", path);
+        await youtubedl(youtubeUrl, {
+            format: "18",
+            forceIpv4: true,
+            o: path,
+        }, { execPath: __dirname });
+        
+        console.log("SUCCESS", youtubeId, "IS", meta, "AT", path);
 
-        video.on('error', (info) => {
-            statuses.set(youtubeId, "failed");
-            console.log("error", info);
-            reject(info);
-
-            console.log("DELETING ", youtubeId);
-            rm(path);
-        });
-
-        video.on('end', () => {
-            console.log("SUCCESS?", youtubeId)
-            statuses.set(youtubeId, "available");
-            saved.add(youtubeId);
-            resolve();
-        });
-
-        video.pipe(createWriteStream(path));
-    });
+        statuses.set(youtubeId, "available");
+        saved.add(youtubeId);
+    } catch (error) {
+        statuses.set(youtubeId, "failed");
+        console.log("error", error);
+        console.log("DELETING", youtubeId, "FROM", path);
+        await unlink(path).catch(() => {});
+    }
 }
 
 app.delete("/youtube/:id", requireAuth, async (request, response) => {
