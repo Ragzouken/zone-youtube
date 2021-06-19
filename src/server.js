@@ -1,8 +1,6 @@
-const { promisify } = require("util");
 const { dirname } = require("path");
 const { mkdir, unlink } = require("fs").promises;
-const youtubedl = require('youtube-dl');
-const youtubedl2 = require('youtube-dl-exec')
+const youtubedl = require('youtube-dl-exec')
 
 const express = require("express");
 const ytsr = require('ytsr');
@@ -104,19 +102,24 @@ async function searchYoutube(options) {
     return entries;
 }
 
-const youtubeGetInfo = promisify(youtubedl.getInfo);
-
 /**
  * @param {string} youtubeId 
  * @returns {VideoMetadata}
  */
 async function getMetaRemote(youtubeId) {
     const url = "https://youtube.com/watch?v=" + youtubeId;
-    const { title, duration } = await youtubeGetInfo(url, ['--force-ipv4']);
+    const { title, duration } = await youtubedl(url, {
+        format: "18",
+        forceIpv4: true,
+        dumpSingleJson: true,
+    });
+
     const meta = { 
-        mediaId: youtubeId, 
         title, 
-        duration: timeToSeconds(duration) * 1000,
+        duration: duration * 1000, 
+        mediaId: youtubeId,
+        youtubeId,
+        src: `${process.env.MEDIA_PATH_PUBLIC}/${youtubeId}.mp4`,
     };
     return meta;
 }
@@ -137,24 +140,16 @@ async function downloadYoutubeVideo(youtubeId) {
     const youtubeUrl = `http://www.youtube.com/watch?v=${youtubeId}`;
 
     try {
-        console.log("DOWNLOADING", youtubeId, "TO", path)
-        const { title, duration, id } = await youtubedl2(youtubeUrl, {
+        const meta = await getMeta(youtubeId);
+        console.log("DOWNLOADING", youtubeId, "TO", path);
+        await youtubedl(youtubeUrl, {
             format: "18",
             forceIpv4: true,
             o: path,
-            dumpSingleJson: true,
-        });
-
-        const meta = { 
-            title, 
-            duration: duration * 1000, 
-            mediaId: id,
-            src: `${process.env.MEDIA_PATH_PUBLIC}/${id}.mp4`,
-        };
+        }, { execPath: __dirname });
         
         console.log("SUCCESS", youtubeId, "IS", meta, "AT", path);
 
-        metas.set(id, meta);
         statuses.set(youtubeId, "available");
         saved.add(youtubeId);
     } catch (error) {
