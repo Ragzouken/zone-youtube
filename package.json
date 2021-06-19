@@ -15,6 +15,7 @@
     "glob": "^7.1.6",
     "lowdb": "^1.0.0",
     "youtube-dl": "^3.0.2",
+    "youtube-dl-exec": "^1.2.4",
     "ytsr": "^3.2.3"
   }
 }

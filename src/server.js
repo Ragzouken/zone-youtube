@@ -1,8 +1,8 @@
 const { promisify } = require("util");
 const { dirname } = require("path");
-const { mkdir, rm } = require("fs").promises;
-const { createWriteStream } = require('fs');
+const { mkdir, unlink } = require("fs").promises;
 const youtubedl = require('youtube-dl');
+const youtubedl2 = require('youtube-dl-exec')
 
 const express = require("express");
 const ytsr = require('ytsr');
@@ -133,40 +133,36 @@ const requestQueue = [];
 let lastDownload = Promise.resolve();
 
 async function downloadYoutubeVideo(youtubeId) {
-    return new Promise((resolve, reject) => {
-        const youtubeUrl = `http://www.youtube.com/watch?v=${youtubeId}`;
-        const video = youtubedl(youtubeUrl, ['--format=18', '--force-ipv4'], { cwd: __dirname });
-        const path = `${MEDIA_PATH}/${youtubeId}.mp4`;
+    const path = `${MEDIA_PATH}/${youtubeId}.mp4`;
+    const youtubeUrl = `http://www.youtube.com/watch?v=${youtubeId}`;
 
-        video.on('info', (info) => {
-            const { title, duration, id } = info;
-            const meta = { 
-                title, 
-                duration: timeToSeconds(duration) * 1000, 
-                mediaId: id,
-                src: `${process.env.MEDIA_PATH_PUBLIC}/${id}.mp4`,
-            };
-            metas.set(id, meta);
-        })
-
-        video.on('error', (info) => {
-            statuses.set(youtubeId, "failed");
-            console.log("error", info);
-            reject(info);
-
-            console.log("DELETING ", youtubeId);
-            rm(path);
+    try {
+        console.log("DOWNLOADING", youtubeId, "TO", path)
+        const { title, duration, id } = await youtubedl2(youtubeUrl, {
+            format: "18",
+            forceIpv4: true,
+            o: path,
+            dumpSingleJson: true,
         });
 
-        video.on('end', () => {
-            console.log("SUCCESS?", youtubeId)
-            statuses.set(youtubeId, "available");
-            saved.add(youtubeId);
-            resolve();
-        });
+        const meta = { 
+            title, 
+            duration: duration * 1000, 
+            mediaId: id,
+            src: `${process.env.MEDIA_PATH_PUBLIC}/${id}.mp4`,
+        };
+        
+        console.log("SUCCESS", youtubeId, "IS", meta, "AT", path);
 
-        video.pipe(createWriteStream(path));
-    });
+        metas.set(id, meta);
+        statuses.set(youtubeId, "available");
+        saved.add(youtubeId);
+    } catch (error) {
+        statuses.set(youtubeId, "failed");
+        console.log("error", error);
+        console.log("DELETING", youtubeId, "FROM", path);
+        await unlink(path).catch(() => {});
+    }
 }
 
 app.delete("/youtube/:id", requireAuth, async (request, response) => {
