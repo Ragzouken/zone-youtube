@@ -39,12 +39,13 @@ const metas = new Map(db.get("metas"));
 /** @type Set<string> */
 const saved = new Set(db.get("saved"));
 /** @type Map<string, string> */
-const statuses = new Map(db.get("statuses"));
+const statuses = new Map();
+
+saved.forEach((videoId) => statuses.set(videoId, "available"));
 
 function save() {
     db.set("metas", Array.from(metas).filter(([videoId, metadata]) => saved.has(videoId))).write();
     db.set("saved", Array.from(saved)).write();
-    db.set("statuses", Array.from(statuses)).write();
 }
 
 process.on('SIGINT', () => {
