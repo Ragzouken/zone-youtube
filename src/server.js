@@ -101,9 +101,7 @@ async function searchYoutube(options) {
         title: video.title,
         duration: timeToSeconds(video.duration) * 1000,
         thumbnail: video.bestThumbnail.url,
-        filesize: video.filesize,
     }));
-    entries.forEach((entry) => metas.set(entry.mediaId, entry));
     return entries;
 }
 
