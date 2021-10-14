@@ -153,9 +153,6 @@ async function downloadYoutubeVideo(youtubeId) {
 
         async function progress() {
             const size = (await stat(path + ".part").catch(() => 0)).size;
-            const progress = size / meta.filesize;
-            const perc = (progress * 100).toFixed(2);
-            console.log(`PROG: ${perc}%`);
             progresses.set(youtubeId, size / meta.filesize);
         }
 
