@@ -1,6 +1,6 @@
 const { dirname } = require("path");
-const { mkdir, unlink } = require("fs").promises;
-const youtubedl = require('youtube-dl-exec')
+const { mkdir, unlink, stat } = require("fs").promises;
+const youtubedl = require('youtube-dl-exec');
 
 const express = require("express");
 const ytsr = require('ytsr');
@@ -26,6 +26,7 @@ process.title = "zone youtube";
  * @property {number} duration
  * @property {string?} thumbnail
  * @property {string?} src
+ * @property {number?} size
  */
 
 db.defaults({
@@ -40,6 +41,8 @@ const metas = new Map(db.get("metas"));
 const saved = new Set(db.get("saved"));
 /** @type Map<string, string> */
 const statuses = new Map();
+/** @type Map<string, number> */
+const progresses = new Map();
 
 saved.forEach((videoId) => statuses.set(videoId, "available"));
 
@@ -98,6 +101,7 @@ async function searchYoutube(options) {
         title: video.title,
         duration: timeToSeconds(video.duration) * 1000,
         thumbnail: video.bestThumbnail.url,
+        filesize: video.filesize,
     }));
     entries.forEach((entry) => metas.set(entry.mediaId, entry));
     return entries;
@@ -109,7 +113,7 @@ async function searchYoutube(options) {
  */
 async function getMetaRemote(youtubeId) {
     const url = "https://youtube.com/watch?v=" + youtubeId;
-    const { title, duration } = await youtubedl(url, {
+    const { title, duration, filesize } = await youtubedl(url, {
         format: "18",
         forceIpv4: true,
         dumpSingleJson: true,
@@ -121,7 +125,9 @@ async function getMetaRemote(youtubeId) {
         mediaId: youtubeId,
         youtubeId,
         src: `${process.env.MEDIA_PATH_PUBLIC}/${youtubeId}.mp4`,
+        filesize,
     };
+
     return meta;
 }
 
@@ -139,18 +145,31 @@ let lastDownload = Promise.resolve();
 async function downloadYoutubeVideo(youtubeId) {
     const path = `${MEDIA_PATH}/${youtubeId}.mp4`;
     const youtubeUrl = `http://www.youtube.com/watch?v=${youtubeId}`;
+    let handle;
 
     try {
         const meta = await getMeta(youtubeId);
         console.log("DOWNLOADING", youtubeId, "TO", path);
+
+        async function progress() {
+            const size = (await stat(path + ".part").catch(() => 0)).size;
+            const progress = size / meta.filesize;
+            const perc = (progress * 100).toFixed(2);
+            console.log(`PROG: ${perc}%`);
+            progresses.set(youtubeId, size / meta.filesize);
+        }
+
+        handle = setInterval(progress, 1000);
+
         await youtubedl(youtubeUrl, {
             format: "18",
             forceIpv4: true,
             o: path,
         }, { execPath: __dirname });
-        
+
         console.log("SUCCESS", youtubeId, "IS", meta, "AT", path);
 
+        progresses.set()
         statuses.set(youtubeId, "available");
         saved.add(youtubeId);
     } catch (error) {
@@ -158,6 +177,8 @@ async function downloadYoutubeVideo(youtubeId) {
         console.log("error", error);
         console.log("DELETING", youtubeId, "FROM", path);
         await unlink(path).catch(() => {});
+    } finally {
+        clearInterval(handle);
     }
 }
 
@@ -197,6 +218,33 @@ app.get("/youtube/:id/status", async (request, response) => {
     const status = statuses.get(request.params.id) || "none";
     response.json(status);
 });
+
+app.get("/youtube/:id/progress", async (request, response) => {
+    const progress = progresses.get(request.params.id) ?? -1;
+    response.json(progress);
+});
+
+/*
+app.get("/youtube/:id/request-test", async (request, response) => {
+    const youtubeId = request.params.id;
+    const status = statuses.get(youtubeId) || "none";
+
+    response.status(202).send();
+
+    if (status === "requested" || status === "available") {
+        console.log("redundant request", youtubeId, status);
+        return;
+    } else {
+        statuses.set(youtubeId, "requested");
+        requestQueue.push(youtubeId);
+    }
+
+    lastDownload = lastDownload.then(
+        () => downloadYoutubeVideo(youtubeId),
+        () => downloadYoutubeVideo(youtubeId),
+    );
+});
+*/
 
 app.post("/youtube/:id/request", requireAuth, async (request, response) => {
     const youtubeId = request.params.id;
