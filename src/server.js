@@ -220,7 +220,7 @@ app.get("/youtube/:id/status", async (request, response) => {
 });
 
 app.get("/youtube/:id/progress", async (request, response) => {
-    const progress = progresses.get(request.params.id) ?? -1;
+    const progress = progresses.get(request.params.id) || 0;
     response.json(progress);
 });
 
