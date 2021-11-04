@@ -269,6 +269,8 @@ app.post("/youtube/:id/request", requireAuth, async (request, response) => {
 
 const listener = app.listen(process.env.PORT, process.env.HOST, () => {
     console.log("zone youtube serving on " + listener.address().port);
+
+    console.log(process.env.YOUTUBE_DL_FILENAME)
 });
 
 function timeToSeconds(time) {
