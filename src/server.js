@@ -219,27 +219,22 @@ app.get("/youtube/:id/progress", async (request, response) => {
     response.json(progress);
 });
 
-/*
-app.get("/youtube/:id/request-test", async (request, response) => {
-    const youtubeId = request.params.id;
-    const status = statuses.get(youtubeId) || "none";
+// app.get("/youtube/:id/request-test", async (request, response) => {
+//     const youtubeId = request.params.id;
+//     const status = statuses.get(youtubeId) || "none";
 
-    response.status(202).send();
+//     response.status(202).send();
 
-    if (status === "requested" || status === "available") {
-        console.log("redundant request", youtubeId, status);
-        return;
-    } else {
-        statuses.set(youtubeId, "requested");
-        requestQueue.push(youtubeId);
-    }
+//     if (status === "requested" || status === "available") {
+//         console.log("redundant request", youtubeId, status);
+//         return;
+//     } else {
+//         statuses.set(youtubeId, "requested");
+//         requestQueue.push(youtubeId);
+//     }
 
-    lastDownload = lastDownload.then(
-        () => downloadYoutubeVideo(youtubeId),
-        () => downloadYoutubeVideo(youtubeId),
-    );
-});
-*/
+//     downloadYoutubeVideo(youtubeId);
+// });
 
 app.post("/youtube/:id/request", requireAuth, async (request, response) => {
     const youtubeId = request.params.id;
