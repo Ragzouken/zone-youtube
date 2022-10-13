@@ -157,7 +157,7 @@ async function downloadYoutubeVideo(youtubeId) {
         handle = setInterval(progress, 1000);
 
         await youtubedl(youtubeUrl, {
-            format: "137+140",
+            format: "bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best",
             forceIpv4: true,
             writeSub: true,
             o: path,
