@@ -1,23 +1,44 @@
-const { dirname } = require("path");
-const { mkdir, unlink, stat } = require("fs").promises;
-const youtubedl = require('youtube-dl-exec');
+import * as dotenv from "dotenv";
+dotenv.config();
+dotenv.config({ path: ".env.defaults" });
 
-const express = require("express");
-const ytsr = require('ytsr');
+process.title = "zone youtube";
 
-require('dotenv').config();
-require('dotenv').config({ path: ".env.defaults" });
+const options = {
+    host: process.env.HOST ?? "localhost",
+    port: parseInt(process.env.PORT ?? "3000"), 
+};
+
+import { dirname } from "node:path";
+import { mkdir, unlink, stat } from "node:fs/promises";
+import youtubedl from "youtube-dl-exec";
+
+import express from "express";
+import ytsr from "ytsr";
 
 mkdir(process.env.MEDIA_PATH).catch(() => {});
 mkdir(dirname(process.env.DATA_PATH)).catch(() => {});
 
-const low = require('lowdb')
-const FileSync = require('lowdb/adapters/FileSync');
-const db = low(new FileSync(process.env.DATA_PATH, { serialize: JSON.stringify, deserialize: JSON.parse }));
+import { LowSync } from "lowdb";
+import { JSONFileSync } from "lowdb/node";
+import { fileURLToPath } from "node:url";
+
+const db = new LowSync(new JSONFileSync(process.env.DATA_PATH));
+db.read();
+db.data ||= {
+    metas: [],
+    saved: [],
+    statuses: [],
+}
+db.write();
+
+function save() {
+    db.data.metas = Array.from(metas).filter(([videoId, metadata]) => saved.has(videoId));
+    db.data.saved = Array.from(saved);
+    db.write();
+}
 
 const MEDIA_PATH = process.env.MEDIA_PATH;
-
-process.title = "zone youtube";
 
 /** 
  * @typedef {Object} VideoMetadata
@@ -29,27 +50,16 @@ process.title = "zone youtube";
  * @property {number?} size
  */
 
-db.defaults({
-    metas: [],
-    saved: [],
-    statuses: [],
-}).write();
-
 /** @type Map<string, VideoMetadata> */
-const metas = new Map(db.get("metas"));
+const metas = new Map(db.data.metas)
 /** @type Set<string> */
-const saved = new Set(db.get("saved"));
+const saved = new Set(db.data.saved);
 /** @type Map<string, string> */
 const statuses = new Map();
 /** @type Map<string, number> */
 const progresses = new Map();
 
 saved.forEach((videoId) => statuses.set(videoId, "available"));
-
-function save() {
-    db.set("metas", Array.from(metas).filter(([videoId, metadata]) => saved.has(videoId))).write();
-    db.set("saved", Array.from(saved)).write();
-}
 
 process.on('SIGINT', () => {
     save();
@@ -80,7 +90,7 @@ function requireAuth(request, response, next) {
 
 async function getFilteredSearch(query) {
     try {
-        const filters = await ytsdr.getFilters(query);
+        const filters = await ytsr.getFilters(query);
         return filters.get('Type').get('Video').url;
     } catch (e) {
         return query;
@@ -107,7 +117,7 @@ async function searchYoutube(options) {
 
 /**
  * @param {string} youtubeId 
- * @returns {VideoMetadata}
+ * @returns {Promise<VideoMetadata>}
  */
 async function getMetaRemote(youtubeId) {
     const url = "https://youtube.com/watch?v=" + youtubeId;
@@ -156,6 +166,9 @@ async function downloadYoutubeVideo(youtubeId) {
 
         handle = setInterval(progress, 1000);
 
+        const __filename = fileURLToPath(import.meta.url);
+        const __dirname = dirname(__filename);
+
         await youtubedl(youtubeUrl, {
             format: "bestvideo[ext=mp4][height<=1080]+bestaudio[ext=m4a]/best[ext=mp4][height<=1080]/best",
             forceIpv4: true,
@@ -165,7 +178,7 @@ async function downloadYoutubeVideo(youtubeId) {
 
         console.log("SUCCESS", youtubeId, "IS", meta, "AT", path);
 
-        progresses.set()
+        // progresses.set()
         statuses.set(youtubeId, "available");
         saved.add(youtubeId);
     } catch (error) {
@@ -263,10 +276,8 @@ app.post("/youtube/:id/request", requireAuth, async (request, response) => {
 });
 //
 
-const listener = app.listen(process.env.PORT, process.env.HOST, () => {
-    console.log("zone youtube serving on " + listener.address().port);
-
-    console.log(process.env.YOUTUBE_DL_FILENAME)
+const listener = app.listen(options.port, options.host, () => {
+    console.log(`${process.title} serving on http://${listener.address().address}:${listener.address().port}`);
 });
 
 function timeToSeconds(time) {
