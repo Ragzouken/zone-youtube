@@ -14,7 +14,7 @@ import { mkdir, unlink, stat } from "node:fs/promises";
 import youtubedl from "youtube-dl-exec";
 
 import express from "express";
-import ytsr from "ytsr";
+import ytsr from "@distube/ytsr";
 
 mkdir(process.env.MEDIA_PATH).catch(() => {});
 mkdir(dirname(process.env.DATA_PATH)).catch(() => {});
@@ -88,29 +88,19 @@ function requireAuth(request, response, next) {
     }
 }
 
-async function getFilteredSearch(query) {
-    try {
-        const filters = await ytsr.getFilters(query);
-        return filters.get('Type').get('Video').url;
-    } catch (e) {
-        return query;
-    }
-}
-
 /**
  * @param {any} options 
  * @returns {Promise<VideoMetadata[]>}
  */
 async function searchYoutube(options) {
-    const search = await getFilteredSearch(options.q)
-    const result = await ytsr(search, { limit: 15 });
-    const videos = result.items.filter((item) => item.type === "video" && !item.isLive && item.duration);
+    const result = await ytsr(options.q, { limit: 15, type: "video" });
+    const videos = result.items.filter((item) => !item.isLive && item.duration);
     /** @type {VideoMetadata[]} */
     const entries = videos.map((video) => ({
         mediaId: video.id,
-        title: video.title,
+        title: video.name,
         duration: timeToSeconds(video.duration) * 1000,
-        thumbnail: video.bestThumbnail.url,
+        thumbnail: video.thumbnail,
     }));
     return entries;
 }
