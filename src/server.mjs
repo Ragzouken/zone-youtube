@@ -13,7 +13,6 @@ import { dirname } from "node:path";
 import { mkdir, unlink, stat } from "node:fs/promises";
 
 import express from "express";
-import ytsr from "@distube/ytsr";
 import execa from "execa";
 
 mkdir(process.env.MEDIA_PATH).catch(() => {});
@@ -89,17 +88,18 @@ function requireAuth(request, response, next) {
 }
 
 /**
- * @param {any} options 
+ * @param {string} query 
  * @returns {Promise<VideoMetadata[]>}
  */
-async function searchYoutube(options) {
-    const result = await ytsr(options.q, { limit: 15, type: "video" });
-    const videos = result.items.filter((item) => !item.isLive && item.duration);
+async function searchYoutube(query) {
+    const child = await execa(process.env.YT_DLP_PATH, [`ytsearch:${query}`, "--dump-json"]);
+    const results = JSON.parse(child.stdout);
+    const videos = results.entries.filter((item) => !item.isLive && item.duration);
     /** @type {VideoMetadata[]} */
     const entries = videos.map((video) => ({
         mediaId: video.id,
-        title: video.name,
-        duration: timeToSeconds(video.duration) * 1000,
+        title: video.title,
+        duration: timeToSeconds(video.duration_string) * 1000,
         thumbnail: video.thumbnail,
     }));
     return entries;
@@ -189,7 +189,7 @@ app.delete("/youtube/:id", requireAuth, async (request, response) => {
 app.get("/youtube", async (request, response) => {
     if (request.query && request.query.q) {
         try {
-            let entries = await searchYoutube(request.query || {});
+            let entries = await searchYoutube(request.query.q);
             response.json(entries.slice(0, 5));
         } catch (error) {
             console.log("SEARCH FAILURE", error);
