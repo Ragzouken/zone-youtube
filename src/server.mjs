@@ -159,7 +159,7 @@ async function downloadYoutubeVideo(youtubeId) {
         await execa(process.env.YT_DLP_PATH, [
             youtubeUrl, 
             `--force-ipv4`, 
-            `-f bestvideo[ext=mp4][height<=480]+bestaudio[ext=m4a]/best[ext=mp4][height<=480]/best`,
+            `-f bestvideo[ext=mp4][height<=720]+bestaudio[ext=m4a]/best[ext=mp4][height<=720]/best`,
             `-o${path}`
         ], { execPath: __dirname });
 
