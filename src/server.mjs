@@ -160,7 +160,7 @@ async function downloadYoutubeVideo(youtubeId) {
             youtubeUrl, 
             `--force-ipv4`, 
             `-f bestvideo[ext=mp4][height<=480]+bestaudio[ext=m4a]/best[ext=mp4][height<=480]/best`,
-            `-o ${path}`
+            `-o${path}`
         ], { execPath: __dirname });
 
         console.log("SUCCESS", youtubeId, "IS", meta, "AT", path);
@@ -265,8 +265,6 @@ app.post("/youtube/:id/request", requireAuth, async (request, response) => {
 
 const listener = app.listen(options.port, options.host, () => {
     console.log(`${process.title} serving on http://${listener.address().address}:${listener.address().port}`);
-
-    downloadYoutubeVideo("jfKHSlK4S9s");
 });
 
 function timeToSeconds(time) {
