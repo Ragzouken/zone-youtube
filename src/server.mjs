@@ -11,10 +11,10 @@ const options = {
 
 import { dirname } from "node:path";
 import { mkdir, unlink, stat } from "node:fs/promises";
-import youtubedl from "youtube-dl-exec";
 
 import express from "express";
 import ytsr from "@distube/ytsr";
+import execa from "execa";
 
 mkdir(process.env.MEDIA_PATH).catch(() => {});
 mkdir(dirname(process.env.DATA_PATH)).catch(() => {});
@@ -111,11 +111,8 @@ async function searchYoutube(options) {
  */
 async function getMetaRemote(youtubeId) {
     const url = "https://youtube.com/watch?v=" + youtubeId;
-    const { title, duration, filesize } = await youtubedl(url, {
-        format: "18",
-        forceIpv4: true,
-        dumpSingleJson: true,
-    });
+    const child = await execa(process.env.YT_DLP_PATH, [url, "--force-ipv4", "--dump-single-json"]);
+    const { title, duration, filesize } = JSON.parse(child.stdout);
 
     const meta = { 
         title, 
@@ -142,7 +139,7 @@ let lastDownload = Promise.resolve();
 
 async function downloadYoutubeVideo(youtubeId) {
     const path = `${MEDIA_PATH}/${youtubeId}.mp4`;
-    const youtubeUrl = `http://www.youtube.com/watch?v=${youtubeId}`;
+    const youtubeUrl = `https://www.youtube.com/watch?v=${youtubeId}`;
     let handle;
 
     try {
@@ -159,12 +156,12 @@ async function downloadYoutubeVideo(youtubeId) {
         const __filename = fileURLToPath(import.meta.url);
         const __dirname = dirname(__filename);
 
-        await youtubedl(youtubeUrl, {
-            format: "bestvideo[ext=mp4][height<=1080]+bestaudio[ext=m4a]/best[ext=mp4][height<=1080]/best",
-            forceIpv4: true,
-            writeSub: true,
-            o: path,
-        }, { execPath: __dirname });
+        await execa(process.env.YT_DLP_PATH, [
+            youtubeUrl, 
+            `--force-ipv4`, 
+            `-f bestvideo[ext=mp4][height<=720]+bestaudio[ext=m4a]/best[ext=mp4][height<=720]/best`,
+            `-o${path}`
+        ], { execPath: __dirname });
 
         console.log("SUCCESS", youtubeId, "IS", meta, "AT", path);
 
@@ -173,7 +170,7 @@ async function downloadYoutubeVideo(youtubeId) {
         saved.add(youtubeId);
     } catch (error) {
         statuses.set(youtubeId, "failed");
-        console.log("error", error);
+        console.log("DOWNLOAD FAILURE", error);
         console.log("DELETING", youtubeId, "FROM", path);
         await unlink(path).catch(() => {});
     } finally {
@@ -195,7 +192,8 @@ app.get("/youtube", async (request, response) => {
             let entries = await searchYoutube(request.query || {});
             response.json(entries.slice(0, 5));
         } catch (error) {
-            response.status(503).send(`search failure: ${error}`);
+            console.log("SEARCH FAILURE", error);
+            response.status(503).json(`search failure: ${error}`);
         }
     } else {
         response.json(Array.from(saved).map((id) => metas.get(id)));
@@ -208,8 +206,9 @@ app.get("/youtube/:id", async (request, response) => {
         const meta = await getMeta(youtubeId);
         meta.src = `${process.env.MEDIA_PATH_PUBLIC}/${youtubeId}.mp4`
         response.json(meta);
-    } catch (e) {
-        response.status(502).send(`access blocked by youtube`);
+    } catch (error) {
+        console.log("META FAILTURE", error);
+        response.status(502).json(`access blocked by youtube`);
     }
 });
 
