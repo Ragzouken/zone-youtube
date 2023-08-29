@@ -5,8 +5,7 @@
   "main": "src/server.mjs",
   "scripts": {
     "start": "node src/server.mjs",
-    "test": "echo \"Error: no test specified\" && exit 1",
-    "postinstall": "cd ./node_modules/youtube-dl-exec && npm run postinstall"
+    "test": "echo \"Error: no test specified\" && exit 1"
   },
   "author": "",
   "license": "ACSL",
