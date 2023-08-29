@@ -170,7 +170,7 @@ async function downloadYoutubeVideo(youtubeId) {
         saved.add(youtubeId);
     } catch (error) {
         statuses.set(youtubeId, "failed");
-        console.log("error", error);
+        console.log("DOWNLOAD FAILURE", error);
         console.log("DELETING", youtubeId, "FROM", path);
         await unlink(path).catch(() => {});
     } finally {
@@ -192,7 +192,8 @@ app.get("/youtube", async (request, response) => {
             let entries = await searchYoutube(request.query || {});
             response.json(entries.slice(0, 5));
         } catch (error) {
-            response.status(503).send(`search failure: ${error}`);
+            console.log("SEARCH FAILURE", error);
+            response.status(503).json(`search failure: ${error}`);
         }
     } else {
         response.json(Array.from(saved).map((id) => metas.get(id)));
@@ -205,8 +206,9 @@ app.get("/youtube/:id", async (request, response) => {
         const meta = await getMeta(youtubeId);
         meta.src = `${process.env.MEDIA_PATH_PUBLIC}/${youtubeId}.mp4`
         response.json(meta);
-    } catch (e) {
-        response.status(502).send(`access blocked by youtube`);
+    } catch (error) {
+        console.log("META FAILTURE", error);
+        response.status(502).json(`access blocked by youtube`);
     }
 });
 
