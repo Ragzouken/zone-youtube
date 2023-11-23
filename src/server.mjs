@@ -58,8 +58,13 @@ const saved = new Set(db.data.saved);
 const statuses = new Map();
 /** @type Map<string, number> */
 const progresses = new Map();
+/** @type Map<string, number> */
+const expires = new Map();
+
+const LIFETIME_MS = parseFloat(process.env.LIFETIME_HOURS ?? "1") * 60 * 60 * 1000;
 
 saved.forEach((videoId) => statuses.set(videoId, "available"));
+saved.forEach((videoId) => expires.set(videoId, performance.now() + LIFETIME_MS));
 
 process.on('SIGINT', () => {
     save();
@@ -178,10 +183,19 @@ async function downloadYoutubeVideo(youtubeId) {
     }
 }
 
-app.delete("/youtube/:id", requireAuth, async (request, response) => {
-    const youtubeId = request.params.id;
+async function deleteYoutubeVideo(youtubeId) {
     saved.delete(youtubeId);
     statuses.delete(youtubeId);
+    expires.delete(youtubeId);
+
+    const path = `${MEDIA_PATH}/${youtubeId}.mp4`;
+    console.log("DELETING", youtubeId, "FROM", path);
+    await unlink(path).catch(() => {});
+}
+
+app.delete("/youtube/:id", requireAuth, async (request, response) => {
+    const youtubeId = request.params.id;
+    deleteYoutubeVideo(youtubeId);
     response.status(200);
 });
 
@@ -245,6 +259,8 @@ app.post("/youtube/:id/request", requireAuth, async (request, response) => {
 
     response.status(202).send();
 
+    expires.set(youtubeId, performance.now() + LIFETIME_MS);
+
     if (status === "requested" || status === "available") {
         console.log("redundant request", youtubeId, status);
         return;
@@ -264,6 +280,16 @@ app.post("/youtube/:id/request", requireAuth, async (request, response) => {
     downloadYoutubeVideo(youtubeId);
 });
 //
+
+function expireVideos() {
+    for (const [videoId, expiry] of expires) {
+        if (expiry < performance.now()) {
+            deleteYoutubeVideo(videoId);
+        }
+    }
+}
+
+setInterval(expireVideos, 60 * 1000);
 
 const listener = app.listen(options.port, options.host, () => {
     console.log(`${process.title} serving on http://${listener.address().address}:${listener.address().port}`);
