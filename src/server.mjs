@@ -23,6 +23,8 @@ import { LowSync } from "lowdb";
 import { JSONFileSync } from "lowdb/node";
 import { fileURLToPath } from "node:url";
 
+const EXTRA_ARGS = process.env.EXTRA_ARGS.split(" ")
+
 const db = new LowSync(new JSONFileSync(process.env.DATA_PATH));
 db.read();
 db.data ||= {
@@ -116,7 +118,7 @@ async function searchYoutube(options) {
  */
 async function getMetaRemote(youtubeId) {
     const url = "https://youtube.com/watch?v=" + youtubeId;
-    const child = await execa(process.env.YT_DLP_PATH, [url, "--force-ipv4", "--dump-single-json", process.env.EXTRA_ARGS]);
+    const child = await execa(process.env.YT_DLP_PATH, [url, "--force-ipv4", "--dump-single-json", ...EXTRA_ARGS]);
     const { title, duration, filesize } = JSON.parse(child.stdout);
 
     const meta = { 
@@ -165,7 +167,7 @@ async function downloadYoutubeVideo(youtubeId) {
             youtubeUrl, 
             `--force-ipv4`, 
             `-f bestvideo[ext=mp4][height<=720]+bestaudio[ext=m4a]/best[ext=mp4][height<=720]/best`,
-            process.env.EXTRA_ARGS,
+            ...EXTRA_ARGS,
             `-o${path}`
         ], { execPath: __dirname });
 
