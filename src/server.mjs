@@ -116,7 +116,7 @@ async function searchYoutube(options) {
  */
 async function getMetaRemote(youtubeId) {
     const url = "https://youtube.com/watch?v=" + youtubeId;
-    const child = await execa(process.env.YT_DLP_PATH, [url, "--force-ipv4", "--dump-single-json"]);
+    const child = await execa(process.env.YT_DLP_PATH, [url, "--force-ipv4", "--dump-single-json", process.env.EXTRA_ARGS]);
     const { title, duration, filesize } = JSON.parse(child.stdout);
 
     const meta = { 
