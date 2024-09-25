@@ -165,6 +165,7 @@ async function downloadYoutubeVideo(youtubeId) {
             youtubeUrl, 
             `--force-ipv4`, 
             `-f bestvideo[ext=mp4][height<=720]+bestaudio[ext=m4a]/best[ext=mp4][height<=720]/best`,
+            process.env.EXTRA_ARGS,
             `-o${path}`
         ], { execPath: __dirname });
 
